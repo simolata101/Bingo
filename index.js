@@ -59,20 +59,22 @@ function drawCard(numbers = [], marked = []) {
   ctx.fillStyle = "#fff0f5";
   ctx.fillRect(0, 0, width, height);
 
-  // Cute header
+  // Cute header centered
   ctx.fillStyle = "#ff69b4";
   ctx.font = "32pt DejaVuSans";
-  ctx.fillText("★ B I N G O ★", 40, 50);
+  const title = "★ B I N G O ★";
+  const titleWidth = ctx.measureText(title).width;
+  ctx.fillText(title, (width - titleWidth) / 2, 50);
 
   // Grid numbers
   ctx.font = "20pt DejaVuSans";
   for (let i = 0; i < 25; i++) {
-    const x = (i % 5) * 60 + 40;
+    const x = (i % 5) * 60 + 30;
     const y = Math.floor(i / 5) * 60 + 90;
     const num = numbers[i];
     const txt = num !== undefined ? num.toString().padStart(2, "0") : "?";
     ctx.fillStyle = marked.includes(num) ? "#e91e63" : "#333";
-    ctx.fillText(txt, x + 5, y + 25);
+    ctx.fillText(txt, x + 10, y + 25);
     ctx.strokeStyle = "#ffb6c1";
     ctx.strokeRect(x, y, 40, 40);
   }
@@ -107,7 +109,7 @@ client.on("messageCreate", async (message) => {
 !bn create – Start new game
 !bn join – Join the game
 !bn mode line/block – Set pattern mode
-!bn mark – Mark the latest called number
+!bn mark <number> – Mark a called number
 !bn stop – Stop the current game
 bingo! – Declare Bingo if you completed the pattern`);
   }
@@ -119,7 +121,7 @@ bingo! – Declare Bingo if you completed the pattern`);
     currentGame.calledNumbers = [];
     players = new Map();
     message.channel.send(
-      "🎲 Bingo game started! Type `!bn join` to join. Game starts in 15 seconds.",
+      "🎲 Bingo game started! Type `!bn join` to join. Game starts in 15 seconds."
     );
     setTimeout(() => {
       if (players.size === 0) {
@@ -184,20 +186,38 @@ bingo! – Declare Bingo if you completed the pattern`);
     message.channel.send(`🔁 Game mode set to **${mode}**.`);
   }
 
-  if (content === "!bn mark") {
-    const player = players.get(message.author.id);
-    if (!player) return message.channel.send("🙅 You're not in the game.");
-    const latest = currentGame.calledNumbers.at(-1);
-    if (!latest)
-      return message.channel.send("❓ No number has been called yet.");
-    if (!player.marked.includes(latest) && player.card.includes(latest)) {
-      player.marked.push(latest);
-      message.channel.send(`✅ Number ${latest} marked.`);
-    } else {
-      message.channel.send(
-        `❌ Number ${latest} not on your card or already marked.`,
-      );
+  if (content.startsWith("!bn mark")) {
+    const args = content.split(" ");
+    if (args.length !== 3 || isNaN(args[2])) {
+      return message.channel.send("❗ Usage: `!bn mark <number>` (e.g. `!bn mark 27`)");
     }
+
+    const numToMark = parseInt(args[2]);
+    const player = players.get(message.author.id);
+
+    if (!player) return message.channel.send("🙅 You're not in the game.");
+    if (!currentGame.calledNumbers.includes(numToMark)) {
+      return message.channel.send(`❌ Number ${numToMark} hasn't been called yet.`);
+    }
+
+    if (!player.card.includes(numToMark)) {
+      return message.channel.send(`❌ Number ${numToMark} is not on your card.`);
+    }
+
+    if (player.marked.includes(numToMark)) {
+      return message.channel.send(`⚠️ Number ${numToMark} is already marked.`);
+    }
+
+    player.marked.push(numToMark);
+    message.channel.send(`✅ You have marked number ${numToMark}.`);
+
+    drawCard(player.card, player.marked).then((buffer) => {
+      const attachment = new AttachmentBuilder(buffer, { name: "card.png" });
+      message.author.send({
+        content: `🆕 Here's your updated card with ${numToMark} marked:`,
+        files: [attachment],
+      });
+    });
   }
 
   if (content === "bingo!") {
@@ -211,7 +231,7 @@ bingo! – Declare Bingo if you completed the pattern`);
       clearInterval(currentGame.interval);
       currentGame.active = false;
       message.channel.send(
-        `🎉 ${message.author.username} wins BINGO in **${currentGame.mode}** mode!`,
+        `🎉 ${message.author.username} wins BINGO in **${currentGame.mode}** mode!`
       );
     } else {
       player.cooldown = now + 5000;
