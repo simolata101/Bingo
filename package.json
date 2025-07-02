@@ -1,0 +1,23 @@
+{
+  "name": "nodejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.73",
+    "@types/node": "^22.13.11",
+    "canvas": "^3.1.2",
+    "discord.js": "^14.21.0",
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0",
+    "pureimage": "^0.4.18",
+    "stream": "^0.0.3",
+    "stream-buffers": "^3.0.3"
+  }
+}
