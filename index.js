@@ -39,20 +39,35 @@ let currentGame = {
 
 function generateCard() {
   const card = [];
+
+  // Define ranges for B I N G O
   const ranges = [
-    [1, 15], [16, 30], [31, 45], [46, 60], [61, 75]
+    [1, 15],    // B
+    [16, 30],   // I
+    [31, 45],   // N
+    [46, 60],   // G
+    [61, 75],   // O
   ];
 
   for (let col = 0; col < 5; col++) {
     const [min, max] = ranges[col];
     const nums = [];
+
+    // Get 5 unique random numbers in column's range
     while (nums.length < 5) {
       const n = Math.floor(Math.random() * (max - min + 1)) + min;
       if (!nums.includes(n)) nums.push(n);
     }
-    if (col === 2) nums[2] = null; // center free
-    card.push(...nums);
+
+    // Place them in the column of the card
+    for (let row = 0; row < 5; row++) {
+      if (!card[row]) card[row] = [];
+      card[row][col] = nums[row];
+    }
   }
+
+  // Set the middle cell to "FREE"
+  card[2][2] = "FREE";
 
   return card;
 }
