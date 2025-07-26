@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, AttachmentBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, AttachmentBuilder, PermissionsBitField } = require("discord.js");
 const express = require("express");
 const PImage = require("pureimage");
 require("dotenv").config();
@@ -16,14 +16,11 @@ const client = new Client({
 });
 
 const TOKEN = process.env.TOKEN;
-const CHANNEL_ID = process.env.CHANNEL_ID;
-const SERVER_ID = process.env.SERVER_ID;
 
 const app = express();
 app.get("/", (req, res) => res.send("Bingo Bot is running"));
 app.listen(3000, () => console.log("Uptime Robot running on port 3000"));
 
-// Register and load font
 const fontPath = path.join(__dirname, "assets", "fonts", "DejaVuSans.ttf");
 const font = PImage.registerFont(fontPath, "DejaVuSans");
 font.loadSync();
@@ -41,12 +38,23 @@ let currentGame = {
 };
 
 function generateCard() {
-  const nums = [];
-  while (nums.length < 25) {
-    const n = Math.floor(Math.random() * 75) + 1;
-    if (!nums.includes(n)) nums.push(n);
+  const card = [];
+  const ranges = [
+    [1, 15], [16, 30], [31, 45], [46, 60], [61, 75]
+  ];
+
+  for (let col = 0; col < 5; col++) {
+    const [min, max] = ranges[col];
+    const nums = [];
+    while (nums.length < 5) {
+      const n = Math.floor(Math.random() * (max - min + 1)) + min;
+      if (!nums.includes(n)) nums.push(n);
+    }
+    if (col === 2) nums[2] = null; // center free
+    card.push(...nums);
   }
-  return nums;
+
+  return card;
 }
 
 function drawCard(numbers = [], marked = []) {
@@ -55,26 +63,41 @@ function drawCard(numbers = [], marked = []) {
   const img = PImage.make(width, height);
   const ctx = img.getContext("2d");
 
-  // Background
   ctx.fillStyle = "#fff0f5";
   ctx.fillRect(0, 0, width, height);
 
-  // Cute header centered
   ctx.fillStyle = "#ff69b4";
   ctx.font = "32pt DejaVuSans";
   const title = "★ B I N G O ★";
   const titleWidth = ctx.measureText(title).width;
   ctx.fillText(title, (width - titleWidth) / 2, 50);
 
-  // Grid numbers
+  const letters = ["B", "I", "N", "G", "O"];
   ctx.font = "20pt DejaVuSans";
+  ctx.fillStyle = "#222";
+  for (let i = 0; i < 5; i++) {
+    ctx.fillText(letters[i], i * 60 + 50, 80);
+  }
+
+  ctx.font = "18pt DejaVuSans";
   for (let i = 0; i < 25; i++) {
-    const x = (i % 5) * 60 + 30;
-    const y = Math.floor(i / 5) * 60 + 90;
+    const col = i % 5;
+    const row = Math.floor(i / 5);
+    const x = col * 60 + 30;
+    const y = row * 60 + 100;
     const num = numbers[i];
-    const txt = num !== undefined ? num.toString().padStart(2, "0") : "?";
-    ctx.fillStyle = marked.includes(num) ? "#e91e63" : "#333";
-    ctx.fillText(txt, x + 10, y + 25);
+
+    if (row === 2 && col === 2) {
+      ctx.fillStyle = "#4caf50";
+      ctx.fillRect(x, y, 40, 40);
+      ctx.fillStyle = "#fff";
+      ctx.fillText("FREE", x + 2, y + 25);
+    } else {
+      const txt = num !== undefined ? num.toString().padStart(2, "0") : "?";
+      ctx.fillStyle = marked.includes(num) ? "#e91e63" : "#333";
+      ctx.fillText(txt, x + 10, y + 25);
+    }
+
     ctx.strokeStyle = "#ffb6c1";
     ctx.strokeRect(x, y, 40, 40);
   }
@@ -89,14 +112,17 @@ function drawCard(numbers = [], marked = []) {
 }
 
 function checkPattern(card, marked, mode) {
+  const isMarked = (n) => n === null || marked.includes(n);
+
   if (mode === "line") {
     for (let i = 0; i < 5; i++) {
       const row = card.slice(i * 5, i * 5 + 5);
-      if (row.every((n) => marked.includes(n))) return true;
+      if (row.every(isMarked)) return true;
     }
   } else if (mode === "block") {
-    return card.every((n) => marked.includes(n));
+    return card.every(isMarked);
   }
+
   return false;
 }
 
@@ -104,17 +130,20 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const content = message.content.trim().toLowerCase();
 
+  const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
+
   if (content === "!bn help") {
     return message.channel.send(`📋 **Bingo Commands:**
-!bn create – Start new game
+!bn create – Start new game (admin only)
 !bn join – Join the game
-!bn mode line/block – Set pattern mode
+!bn mode line/block – Set pattern mode (admin only)
 !bn mark <number> – Mark a called number
-!bn stop – Stop the current game
+!bn stop – Stop the current game (admin only)
 bingo! – Declare Bingo if you completed the pattern`);
   }
 
   if (content === "!bn create") {
+    if (!isAdmin) return message.channel.send("🚫 You don’t have permission to start a Bingo game.");
     if (currentGame.active)
       return message.channel.send("⛔ A game is already running.");
     currentGame.active = true;
@@ -123,34 +152,46 @@ bingo! – Declare Bingo if you completed the pattern`);
     message.channel.send(
       "🎲 Bingo game started! Type `!bn join` to join. Game starts in 15 seconds."
     );
+
     setTimeout(() => {
       if (players.size === 0) {
         message.channel.send("⚠️ No players joined. Game cancelled.");
         currentGame.active = false;
         return;
       }
+
       currentGame.interval = setInterval(() => {
-        const n = Math.floor(Math.random() * 75) + 1;
-        if (!currentGame.calledNumbers.includes(n)) {
-          currentGame.calledNumbers.push(n);
-          message.channel.send(`🎱 **Number called: ${n}**`);
-          for (const [id, p] of players) {
-            drawCard(p.card, p.marked).then((buffer) => {
-              const attachment = new AttachmentBuilder(buffer, {
-                name: "card.png",
-              });
-              client.users.send(id, {
-                content: `Number ${n} called!`,
-                files: [attachment],
-              });
+        if (currentGame.calledNumbers.length >= 75) {
+          clearInterval(currentGame.interval);
+          message.channel.send("❗ All 75 balls have been called. No more numbers will be drawn, but you can still call `bingo!`.");
+          return;
+        }
+
+        let n;
+        do {
+          n = Math.floor(Math.random() * 75) + 1;
+        } while (currentGame.calledNumbers.includes(n));
+
+        currentGame.calledNumbers.push(n);
+        message.channel.send(`🎱 **Number called: ${n}**`);
+
+        for (const [id, p] of players) {
+          drawCard(p.card, p.marked).then((buffer) => {
+            const attachment = new AttachmentBuilder(buffer, {
+              name: "card.png",
             });
-          }
+            client.users.send(id, {
+              content: `Number ${n} called!`,
+              files: [attachment],
+            }).catch(console.error);
+          });
         }
       }, 15000);
     }, 15000);
   }
 
   if (content === "!bn stop") {
+    if (!isAdmin) return message.channel.send("🚫 You don’t have permission to stop the game.");
     if (!currentGame.active)
       return message.channel.send("⚠️ No game is currently active.");
     clearInterval(currentGame.interval);
@@ -177,11 +218,14 @@ bingo! – Declare Bingo if you completed the pattern`);
   }
 
   if (content.startsWith("!bn mode")) {
+    if (!isAdmin) return message.channel.send("🚫 You don’t have permission to change the game mode.");
     if (!currentGame.active)
       return message.channel.send("⛔ Start a game first.");
+
     const mode = content.split(" ")[2];
     if (mode !== "line" && mode !== "block")
       return message.channel.send("❗ Invalid mode. Use `line` or `block`.");
+
     currentGame.mode = mode;
     message.channel.send(`🔁 Game mode set to **${mode}**.`);
   }
@@ -194,23 +238,19 @@ bingo! – Declare Bingo if you completed the pattern`);
 
     const numToMark = parseInt(args[2]);
     const player = players.get(message.author.id);
-
     if (!player) return message.channel.send("🙅 You're not in the game.");
     if (!currentGame.calledNumbers.includes(numToMark)) {
       return message.channel.send(`❌ Number ${numToMark} hasn't been called yet.`);
     }
-
     if (!player.card.includes(numToMark)) {
       return message.channel.send(`❌ Number ${numToMark} is not on your card.`);
     }
-
     if (player.marked.includes(numToMark)) {
       return message.channel.send(`⚠️ Number ${numToMark} is already marked.`);
     }
 
     player.marked.push(numToMark);
     message.channel.send(`✅ You have marked number ${numToMark}.`);
-
     drawCard(player.card, player.marked).then((buffer) => {
       const attachment = new AttachmentBuilder(buffer, { name: "card.png" });
       message.author.send({
