@@ -39,11 +39,7 @@ let currentGame = {
 
 function generateCard() {
   const columns = [];
-  const ranges = [
-    [1, 15], [16, 30], [31, 45], [46, 60], [61, 75]
-  ];
-
-  // Generate each column with 5 unique numbers
+  const ranges = [[1, 15], [16, 30], [31, 45], [46, 60], [61, 75]];
   for (let col = 0; col < 5; col++) {
     const [min, max] = ranges[col];
     const nums = [];
@@ -53,16 +49,12 @@ function generateCard() {
     }
     columns.push(nums);
   }
-
-  // Transpose columns into rows (flattened into 1D array)
   const card = [];
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 5; col++) {
-      // Set center cell (N3) as free
       card.push(row === 2 && col === 2 ? null : columns[col][row]);
     }
   }
-
   return card;
 }
 
@@ -71,18 +63,14 @@ function drawCard(numbers = [], marked = []) {
   const img = PImage.make(width, height);
   const ctx = img.getContext("2d");
 
-  // Background
   ctx.fillStyle = "#fff0f5";
   ctx.fillRect(0, 0, width, height);
-
-  // Title
   ctx.fillStyle = "#ff69b4";
   ctx.font = "32pt DejaVuSans";
   const title = "★ B I N G O ★";
   const titleWidth = ctx.measureText(title).width;
   ctx.fillText(title, (width - titleWidth) / 2, 50);
 
-  // Column letters
   const letters = ["B", "I", "N", "G", "O"];
   ctx.font = "20pt DejaVuSans";
   ctx.fillStyle = "#222";
@@ -90,7 +78,6 @@ function drawCard(numbers = [], marked = []) {
     ctx.fillText(letters[i], i * 60 + 50, 80);
   }
 
-  // Numbers & Cells
   ctx.font = "18pt DejaVuSans";
   for (let i = 0; i < 25; i++) {
     const col = i % 5;
@@ -99,7 +86,6 @@ function drawCard(numbers = [], marked = []) {
     const y = row * 60 + 100;
     const num = numbers[i];
 
-    // FREE space in center
     if (row === 2 && col === 2) {
       ctx.fillStyle = "#4caf50";
       ctx.fillRect(x, y, 40, 40);
@@ -110,24 +96,25 @@ function drawCard(numbers = [], marked = []) {
       ctx.fillStyle = marked.includes(num) ? "#e91e63" : "#333";
       ctx.fillText(text, x + 10, y + 25);
     }
-
     ctx.strokeStyle = "#ffb6c1";
     ctx.strokeRect(x, y, 40, 40);
   }
 
-  // Export as PNG
   return new Promise((resolve, reject) => {
-    const tmpPath = "card.png";
+    const tmpPath = `card-${Date.now()}.png`;
     const stream = fs.createWriteStream(tmpPath);
     PImage.encodePNGToStream(img, stream)
-      .then(() => resolve(fs.readFileSync(tmpPath)))
+      .then(() => {
+        const buffer = fs.readFileSync(tmpPath);
+        fs.unlinkSync(tmpPath);
+        resolve(buffer);
+      })
       .catch(reject);
   });
 }
 
 function checkPattern(card, marked, mode) {
   const isMarked = (n) => n === null || marked.includes(n);
-
   if (mode === "line") {
     for (let i = 0; i < 5; i++) {
       const row = card.slice(i * 5, i * 5 + 5);
@@ -136,36 +123,26 @@ function checkPattern(card, marked, mode) {
   } else if (mode === "block") {
     return card.every(isMarked);
   }
-
   return false;
 }
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
   const content = message.content.trim().toLowerCase();
-
   const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
   if (content === "!bn help") {
-    return message.channel.send(`📋 **Bingo Commands:**
-!bn create – Start new game (admin only)
-!bn join – Join the game
-!bn mode line/block – Set pattern mode (admin only)
-!bn mark <number> – Mark a called number
-!bn stop – Stop the current game (admin only)
-bingo! – Declare Bingo if you completed the pattern`);
+    return message.channel.send(`📋 **Bingo Commands:**\n!bn create – Start new game (admin only)\n!bn join – Join the game\n!bn mode line/block – Set pattern mode (admin only)\n!bn mark <number> – Mark a called number\n!bn stop – Stop the current game (admin only)\nbingo! – Declare Bingo if you completed the pattern`);
   }
 
   if (content === "!bn create") {
     if (!isAdmin) return message.channel.send("🚫 You don’t have permission to start a Bingo game.");
-    if (currentGame.active)
-      return message.channel.send("⛔ A game is already running.");
+    if (currentGame.active) return message.channel.send("⛔ A game is already running.");
+
     currentGame.active = true;
     currentGame.calledNumbers = [];
     players = new Map();
-    message.channel.send(
-      "🎲 Bingo game started! Type `!bn join` to join. Game starts in 15 seconds."
-    );
+    message.channel.send("🎲 Bingo game started! Type `!bn join` to join. Game starts in 1 minute.");
 
     setTimeout(() => {
       if (players.size === 0) {
@@ -177,7 +154,7 @@ bingo! – Declare Bingo if you completed the pattern`);
       currentGame.interval = setInterval(() => {
         if (currentGame.calledNumbers.length >= 75) {
           clearInterval(currentGame.interval);
-          message.channel.send("❗ All 75 balls have been called. No more numbers will be drawn, but you can still call `bingo!`.");
+          message.channel.send("❗ All 75 balls have been called. You can still call `bingo!`.");
           return;
         }
 
@@ -189,25 +166,22 @@ bingo! – Declare Bingo if you completed the pattern`);
         currentGame.calledNumbers.push(n);
         message.channel.send(`🎱 **Number called: ${n}**`);
 
-        for (const [id, p] of players) {
-          drawCard(p.card, p.marked).then((buffer) => {
-            const attachment = new AttachmentBuilder(buffer, {
-              name: "card.png",
-            });
+        let delay = 0;
+        for (const [id] of players) {
+          setTimeout(() => {
             client.users.send(id, {
-              content: `Number ${n} called!`,
-              files: [attachment],
+              content: `🎱 Number **${n}** has been called!`,
             }).catch(console.error);
-          });
+          }, delay);
+          delay += 1000;
         }
-      }, 15000);
-    }, 15000);
+      }, 60000);
+    }, 60000);
   }
 
   if (content === "!bn stop") {
     if (!isAdmin) return message.channel.send("🚫 You don’t have permission to stop the game.");
-    if (!currentGame.active)
-      return message.channel.send("⚠️ No game is currently active.");
+    if (!currentGame.active) return message.channel.send("⚠️ No game is currently active.");
     clearInterval(currentGame.interval);
     currentGame.active = false;
     players = new Map();
@@ -215,31 +189,30 @@ bingo! – Declare Bingo if you completed the pattern`);
   }
 
   if (content === "!bn join") {
-    if (!currentGame.active)
-      return message.channel.send("🎮 No active game. Use `!bn create` first.");
-    if (players.has(message.author.id))
-      return message.channel.send("🎮 You already joined!");
+    if (!currentGame.active) return message.channel.send("🎮 No active game. Use `!bn create` first.");
+    if (players.has(message.author.id)) return message.channel.send("🎮 You already joined!");
+
     const card = generateCard();
+    players.set(message.author.id, { card, marked: [], cooldown: 0 });
+
     drawCard(card).then((buffer) => {
       const attachment = new AttachmentBuilder(buffer, { name: "card.png" });
-      players.set(message.author.id, { card, marked: [], cooldown: 0 });
       message.author.send({
         content: "🎴 Here is your Bingo card!",
         files: [attachment],
+      }).catch(() => {
+        message.channel.send(`❗ Couldn't DM ${message.author}. Please enable DMs.`);
       });
-      message.channel.send(`${message.author.username} has joined the game.`);
     });
+
+    message.channel.send(`${message.author.username} has joined the game.`);
   }
 
   if (content.startsWith("!bn mode")) {
     if (!isAdmin) return message.channel.send("🚫 You don’t have permission to change the game mode.");
-    if (!currentGame.active)
-      return message.channel.send("⛔ Start a game first.");
-
+    if (!currentGame.active) return message.channel.send("⛔ Start a game first.");
     const mode = content.split(" ")[2];
-    if (mode !== "line" && mode !== "block")
-      return message.channel.send("❗ Invalid mode. Use `line` or `block`.");
-
+    if (mode !== "line" && mode !== "block") return message.channel.send("❗ Invalid mode. Use `line` or `block`.");
     currentGame.mode = mode;
     message.channel.send(`🔁 Game mode set to **${mode}**.`);
   }
@@ -249,19 +222,12 @@ bingo! – Declare Bingo if you completed the pattern`);
     if (args.length !== 3 || isNaN(args[2])) {
       return message.channel.send("❗ Usage: `!bn mark <number>` (e.g. `!bn mark 27`)");
     }
-
     const numToMark = parseInt(args[2]);
     const player = players.get(message.author.id);
     if (!player) return message.channel.send("🙅 You're not in the game.");
-    if (!currentGame.calledNumbers.includes(numToMark)) {
-      return message.channel.send(`❌ Number ${numToMark} hasn't been called yet.`);
-    }
-    if (!player.card.includes(numToMark)) {
-      return message.channel.send(`❌ Number ${numToMark} is not on your card.`);
-    }
-    if (player.marked.includes(numToMark)) {
-      return message.channel.send(`⚠️ Number ${numToMark} is already marked.`);
-    }
+    if (!currentGame.calledNumbers.includes(numToMark)) return message.channel.send(`❌ Number ${numToMark} hasn't been called yet.`);
+    if (!player.card.includes(numToMark)) return message.channel.send(`❌ Number ${numToMark} is not on your card.`);
+    if (player.marked.includes(numToMark)) return message.channel.send(`⚠️ Number ${numToMark} is already marked.`);
 
     player.marked.push(numToMark);
     message.channel.send(`✅ You have marked number ${numToMark}.`);
@@ -278,15 +244,11 @@ bingo! – Declare Bingo if you completed the pattern`);
     const now = Date.now();
     const player = players.get(message.author.id);
     if (!player) return;
-    if (now < (player.cooldown || 0)) {
-      return message.channel.send("🕒 You're on cooldown. Try again soon.");
-    }
+    if (now < (player.cooldown || 0)) return message.channel.send("🕒 You're on cooldown. Try again soon.");
     if (checkPattern(player.card, player.marked, currentGame.mode)) {
       clearInterval(currentGame.interval);
       currentGame.active = false;
-      message.channel.send(
-        `🎉 ${message.author.username} wins BINGO in **${currentGame.mode}** mode!`
-      );
+      message.channel.send(`🎉 ${message.author.username} wins BINGO in **${currentGame.mode}** mode!`);
     } else {
       player.cooldown = now + 5000;
       message.channel.send("❌ Incorrect Bingo! 5s cooldown applied.");
