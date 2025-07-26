@@ -38,11 +38,12 @@ let currentGame = {
 };
 
 function generateCard() {
-  const card = [];
+  const columns = [];
   const ranges = [
     [1, 15], [16, 30], [31, 45], [46, 60], [61, 75]
   ];
 
+  // Generate each column with 5 unique numbers
   for (let col = 0; col < 5; col++) {
     const [min, max] = ranges[col];
     const nums = [];
@@ -50,28 +51,38 @@ function generateCard() {
       const n = Math.floor(Math.random() * (max - min + 1)) + min;
       if (!nums.includes(n)) nums.push(n);
     }
-    if (col === 2) nums[2] = null; // center free
-    card.push(...nums);
+    columns.push(nums);
+  }
+
+  // Transpose columns into rows (flattened into 1D array)
+  const card = [];
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
+      // Set center cell (N3) as free
+      card.push(row === 2 && col === 2 ? null : columns[col][row]);
+    }
   }
 
   return card;
 }
 
 function drawCard(numbers = [], marked = []) {
-  const width = 350,
-    height = 420;
+  const width = 350, height = 420;
   const img = PImage.make(width, height);
   const ctx = img.getContext("2d");
 
+  // Background
   ctx.fillStyle = "#fff0f5";
   ctx.fillRect(0, 0, width, height);
 
+  // Title
   ctx.fillStyle = "#ff69b4";
   ctx.font = "32pt DejaVuSans";
   const title = "★ B I N G O ★";
   const titleWidth = ctx.measureText(title).width;
   ctx.fillText(title, (width - titleWidth) / 2, 50);
 
+  // Column letters
   const letters = ["B", "I", "N", "G", "O"];
   ctx.font = "20pt DejaVuSans";
   ctx.fillStyle = "#222";
@@ -79,6 +90,7 @@ function drawCard(numbers = [], marked = []) {
     ctx.fillText(letters[i], i * 60 + 50, 80);
   }
 
+  // Numbers & Cells
   ctx.font = "18pt DejaVuSans";
   for (let i = 0; i < 25; i++) {
     const col = i % 5;
@@ -87,21 +99,23 @@ function drawCard(numbers = [], marked = []) {
     const y = row * 60 + 100;
     const num = numbers[i];
 
+    // FREE space in center
     if (row === 2 && col === 2) {
       ctx.fillStyle = "#4caf50";
       ctx.fillRect(x, y, 40, 40);
       ctx.fillStyle = "#fff";
       ctx.fillText("FREE", x + 2, y + 25);
     } else {
-      const txt = num !== undefined ? num.toString().padStart(2, "0") : "?";
+      const text = num !== undefined ? num.toString().padStart(2, "0") : "?";
       ctx.fillStyle = marked.includes(num) ? "#e91e63" : "#333";
-      ctx.fillText(txt, x + 10, y + 25);
+      ctx.fillText(text, x + 10, y + 25);
     }
 
     ctx.strokeStyle = "#ffb6c1";
     ctx.strokeRect(x, y, 40, 40);
   }
 
+  // Export as PNG
   return new Promise((resolve, reject) => {
     const tmpPath = "card.png";
     const stream = fs.createWriteStream(tmpPath);
