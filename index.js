@@ -175,7 +175,7 @@ client.on("messageCreate", async (message) => {
           }, delay);
           delay += 1000;
         }
-      }, 60000);
+      }, 20000);
     }, 60000);
   }
 
