@@ -37,9 +37,19 @@ let currentGame = {
   interval: null,
 };
 
+const LETTER_PATTERNS = {
+  B: [0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 19, 20, 21, 22, 23, 24],
+  I: [0, 1, 2, 3, 4, 7, 12, 17, 20, 21, 22, 23, 24],
+  N: [0, 4, 5, 6, 9, 10, 12, 14, 15, 18, 19, 20, 24],
+  G: [0, 1, 2, 3, 4, 5, 10, 13, 14, 15, 19, 20, 21, 22, 23, 24],
+  O: [0, 1, 2, 3, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 23, 24]
+};
+
+// Generate a 5x5 Bingo card with FREE space at center
 function generateCard() {
   const columns = [];
   const ranges = [[1, 15], [16, 30], [31, 45], [46, 60], [61, 75]];
+
   for (let col = 0; col < 5; col++) {
     const [min, max] = ranges[col];
     const nums = [];
@@ -49,15 +59,18 @@ function generateCard() {
     }
     columns.push(nums);
   }
+
   const card = [];
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 5; col++) {
       card.push(row === 2 && col === 2 ? null : columns[col][row]);
     }
   }
+
   return card;
 }
 
+// Draw the Bingo card to PNG using PureImage
 function drawCard(numbers = [], marked = []) {
   const width = 350, height = 420;
   const img = PImage.make(width, height);
@@ -96,6 +109,7 @@ function drawCard(numbers = [], marked = []) {
       ctx.fillStyle = marked.includes(num) ? "#e91e63" : "#333";
       ctx.fillText(text, x + 10, y + 25);
     }
+
     ctx.strokeStyle = "#ffb6c1";
     ctx.strokeRect(x, y, 40, 40);
   }
@@ -113,18 +127,53 @@ function drawCard(numbers = [], marked = []) {
   });
 }
 
+// Check if a card meets a specific pattern mode
 function checkPattern(card, marked, mode) {
   const isMarked = (n) => n === null || marked.includes(n);
+
   if (mode === "line") {
     for (let i = 0; i < 5; i++) {
       const row = card.slice(i * 5, i * 5 + 5);
       if (row.every(isMarked)) return true;
     }
-  } else if (mode === "block") {
+  }
+
+  else if (mode === "vertical") {
+    for (let col = 0; col < 5; col++) {
+      let allMarked = true;
+      for (let row = 0; row < 5; row++) {
+        const index = row * 5 + col;
+        if (!isMarked(card[index])) {
+          allMarked = false;
+          break;
+        }
+      }
+      if (allMarked) return true;
+    }
+  }
+
+  else if (mode === "diagonal") {
+    const diag1 = [0, 6, 12, 18, 24];
+    const diag2 = [4, 8, 12, 16, 20];
+    if (diag1.every(i => isMarked(card[i])) || diag2.every(i => isMarked(card[i]))) return true;
+  }
+
+  else if (mode === "block") {
     return card.every(isMarked);
   }
+
+  else if (mode === "corners") {
+    const cornerIndexes = [0, 4, 20, 24];
+    return cornerIndexes.every(i => isMarked(card[i]));
+  }
+
+  else if (["B", "I", "N", "G", "O"].includes(mode)) {
+    return LETTER_PATTERNS[mode].every(i => isMarked(card[i]));
+  }
+
   return false;
 }
+
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
@@ -132,7 +181,23 @@ client.on("messageCreate", async (message) => {
   const isAdmin = message.member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
   if (content === "!bn help") {
-    return message.channel.send(`📋 **Bingo Commands:**\n!bn create – Start new game (admin only)\n!bn join – Join the game\n!bn mode line/block – Set pattern mode (admin only)\n!bn mark <number> – Mark a called number\n!bn stop – Stop the current game (admin only)\nbingo! – Declare Bingo if you completed the pattern`);
+  return message.channel.send(`📋 **Bingo Commands:**
+  > 🎮 **Game Commands**
+  • \`!bn create\` – Start a new game *(admin only)*
+  • \`!bn join\` – Join the game
+  • \`!bn mark <number>\` – Mark a called number
+  • \`bingo!\` – Declare Bingo if you completed the pattern
+  • \`!bn stop\` – Stop the current game *(admin only)*
+  
+  > 🎯 **Pattern Mode Commands**
+  • \`!bn mode line\` – Horizontal line
+  • \`!bn mode vertical\` – Vertical line
+  • \`!bn mode diagonal\` – Diagonal
+  • \`!bn mode corners\` – Four corners
+  • \`!bn mode block\` – Full blackout
+  • \`!bn mode B/I/N/G/O\` – Letter-shaped pattern (e.g., \`!bn mode B\`)
+  
+  🔤 **Note:** Letter patterns follow a 5x5 grid shape forming the letter visually.`);
   }
 
   if (content === "!bn create") {
