@@ -277,10 +277,38 @@ client.on("messageCreate", async (message) => {
     if (!isAdmin) return message.channel.send("🚫 You don’t have permission to change the game mode.");
     if (!currentGame.active) return message.channel.send("⛔ Start a game first.");
     const mode = content.split(" ")[2];
-    if (mode !== "line" && mode !== "block") return message.channel.send("❗ Invalid mode. Use `line` or `block`.");
+    if (mode !== "line" 
+        && mode !== "block" 
+        && mode !== "vertical" 
+        && mode !== "diagonal" 
+        && mode !== "corners" 
+        && mode !== "B" 
+        && mode !== "I" 
+        && mode !== "N" 
+        && mode !== "G" 
+        && mode !== "O") return message.channel.send("❗ Invalid mode. Use `line` or `block`.");
     currentGame.mode = mode;
     message.channel.send(`🔁 Game mode set to **${mode}**.`);
   }
+
+  if (content.startsWith("!bn players")) {
+  if (!currentGame.active) {
+    return message.channel.send("⚠️ No active game. Use `!bn create` to start one.");
+  }
+
+  if (players.size === 0) {
+    return message.channel.send("📭 No players have joined the game yet.");
+  }
+
+  const playerList = [...players.keys()]
+    .map(id => {
+      const user = client.users.cache.get(id);
+      return user ? `• ${user.username}` : `• Unknown (${id})`;
+    })
+    .join("\n");
+
+  message.channel.send(`👥 **Players in Game (${players.size}):**\n${playerList}`);
+}
 
   if (content.startsWith("!bn mark")) {
     const args = content.split(" ");
@@ -305,20 +333,24 @@ client.on("messageCreate", async (message) => {
     });
   }
 
-  if (content === "bingo!") {
-    const now = Date.now();
-    const player = players.get(message.author.id);
-    if (!player) return;
-    if (now < (player.cooldown || 0)) return message.channel.send("🕒 You're on cooldown. Try again soon.");
-    if (checkPattern(player.card, player.marked, currentGame.mode)) {
-      clearInterval(currentGame.interval);
-      currentGame.active = false;
-      message.channel.send(`🎉 ${message.author.username} wins BINGO in **${currentGame.mode}** mode!`);
-    } else {
-      player.cooldown = now + 5000;
-      message.channel.send("❌ Incorrect Bingo! 5s cooldown applied.");
-    }
+if (content === "bingo!") {
+  if (!message.guild) {
+    return message.channel.send("❌ You can't call `bingo!` in DMs. Use it in the server channel.");
   }
-});
+
+  const now = Date.now();
+  const player = players.get(message.author.id);
+  if (!player) return;
+  if (now < (player.cooldown || 0)) return message.channel.send("🕒 You're on cooldown. Try again soon.");
+  if (checkPattern(player.card, player.marked, currentGame.mode)) {
+    clearInterval(currentGame.interval);
+    currentGame.active = false;
+    message.channel.send(`🎉 ${message.author.username} wins BINGO in **${currentGame.mode}** mode!`);
+  } else {
+    player.cooldown = now + 5000;
+    message.channel.send("❌ Incorrect Bingo! 5s cooldown applied.");
+  }
+}
+
 
 client.login(TOKEN);
