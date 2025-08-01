@@ -334,9 +334,20 @@ client.on("messageCreate", async (message) => {
   }
 
 if (content === "bingo!") {
+						   
   if (!message.guild) {
+						
     return message.channel.send("❌ You can't call `bingo!` in DMs. Use it in the server channel.");
+																	 
+										  
+								 
+																										  
+			
+								   
+																		
+	 
   }
+   
 
   const now = Date.now();
   const player = players.get(message.author.id);
@@ -351,6 +362,6 @@ if (content === "bingo!") {
     message.channel.send("❌ Incorrect Bingo! 5s cooldown applied.");
   }
 }
-
+});
 
 client.login(TOKEN);
