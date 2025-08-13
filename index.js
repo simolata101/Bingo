@@ -17,6 +17,20 @@ const client = new Client({
 
 const TOKEN = process.env.TOKEN;
 
+// Track daily create attempts per user
+let createAttempts = new Map();
+let lastResetDate = new Date().toDateString();
+
+// Reset create attempts daily
+function resetCreateAttemptsIfNewDay() {
+  const today = new Date().toDateString();
+  if (today !== lastResetDate) {
+    createAttempts.clear();
+    lastResetDate = today;
+  }
+}
+
+
 const app = express();
 app.get("/", (req, res) => res.send("Bingo Bot is running"));
 app.listen(3000, () => console.log("Uptime Robot running on port 3000"));
