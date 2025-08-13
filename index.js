@@ -200,6 +200,61 @@ client.on("messageCreate", async (message) => {
   🔤 **Note:** Letter patterns follow a 5x5 grid shape forming the letter visually.`);
   }
 
+  if (content === "!bn create") {
+  // For members: limit to 3 per day
+  if (!isAdmin) {
+    const attempts = createAttempts.get(message.author.id) || 0;
+    if (attempts >= 3) {
+      return message.channel.send(`🚫 You've reached your **3 game creation limit** for today.`);
+    }
+    createAttempts.set(message.author.id, attempts + 1);
+    const remaining = 3 - (attempts + 1);
+    message.channel.send(`✅ Game creation attempt **${attempts + 1}/3** for today. ${remaining > 0 ? `You have **${remaining}** left.` : "That was your last one!"}`);
+  }
+
+  if (currentGame.active) return message.channel.send("⛔ A game is already running.");
+
+  currentGame.active = true;
+  currentGame.calledNumbers = [];
+  players = new Map();
+  message.channel.send(`🎲 Bingo game started by **${message.author.username}**! Type \`!bn join\` to join. Game starts in 1 minute.`);
+
+  setTimeout(() => {
+    if (players.size === 0) {
+      message.channel.send("⚠️ No players joined. Game cancelled.");
+      currentGame.active = false;
+      return;
+    }
+
+    currentGame.interval = setInterval(() => {
+      if (currentGame.calledNumbers.length >= 75) {
+        clearInterval(currentGame.interval);
+        message.channel.send("❗ All 75 balls have been called. You can still call \`bingo!\`.");
+        return;
+      }
+
+      let n;
+      do {
+        n = Math.floor(Math.random() * 75) + 1;
+      } while (currentGame.calledNumbers.includes(n));
+
+      currentGame.calledNumbers.push(n);
+      message.channel.send(`🎱 **Number called: ${n}**`);
+
+      let delay = 0;
+      for (const [id] of players) {
+        setTimeout(() => {
+          client.users.send(id, {
+            content: `🎱 Number **${n}** has been called!`,
+          }).catch(console.error);
+        }, delay);
+        delay += 1000;
+      }
+    }, 20000);
+  }, 60000);
+}
+
+
   if (content === "!bn stop") {
     if (!isAdmin) return message.channel.send("🚫 You don’t have permission to stop the game.");
     if (!currentGame.active) return message.channel.send("⚠️ No game is currently active.");
